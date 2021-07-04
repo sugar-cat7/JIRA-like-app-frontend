@@ -167,6 +167,9 @@ const Auth: React.FC = () => {
 };
 ```
 
+- css は一旦 css module で描いてる
+- 一部 materialUI usestyle とかは materialUI のスタイリングに使用
+
 ### 動作確認
 
 ```
@@ -174,3 +177,37 @@ CORSの設定をAPI側でしておかないとlocalhost:3000からdjango側へ�
 ```
 
 chrome/検証 -> application -> localstorage から refresh token とか確認できる
+
+### Tips
+
+- sort する
+
+```typescript
+const handleClickSortColumn = (column: keyof READ_TASK) => {
+  const isDesc = column === state.activeKey && state.order === "desc";
+  const newOrder = isDesc ? "asc" : "desc";
+  //   渡された配列をコピーして標準メソッドでsortする→1が返り値だと前に来る
+  const sortedRows = Array.from(state.rows).sort((a, b) => {
+    if (a[column] > b[column]) {
+      return newOrder === "asc" ? 1 : -1;
+    } else if (a[column] < b[column]) {
+      return newOrder === "asc" ? -1 : 1;
+    } else {
+      return 0;
+    }
+  });
+
+  setState({
+    rows: sortedRows,
+    order: newOrder,
+    activeKey: column,
+  });
+};
+
+useEffect(() => {
+  setState((state) => ({
+    ...state,
+    rows: tasks,
+  }));
+}, [tasks]);
+```
