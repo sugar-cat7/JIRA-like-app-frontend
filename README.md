@@ -1,44 +1,168 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app), using the [Redux](https://redux.js.org/) and [Redux Toolkit](https://redux-toolkit.js.org/) template.
+JIRA Frontend
 
-## Available Scripts
+### 環境準備
 
-In the project directory, you can run:
+- プロジェクトの作成 (typescript redux toolkit 使用)
+  `npx create-react-app . --template redux-typescript`
 
-### `yarn start`
+- Package install
 
-Runs the app in the development mode.<br />
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```
+axios -> Rest apiと通信用
+react-router-dom @types/react-router-dom -> ページ遷移用(typescript ver)
+@material-ui/core @material-ui/icons @material-ui/lab -> style
+```
 
-The page will reload if you make edits.<br />
-You will also see any lint errors in the console.
+- 環境変数定義
+  - React のプロジェクトの場合.env 配下の環境変数は`REACT_KYE`みたいな感じで REACT をつける必要がある
 
-### `yarn test`
+### 作成するコンポーネントごとの Slice を作る
 
-Launches the test runner in the interactive watch mode.<br />
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- What’s Slice
 
-### `yarn build`
+  - redux の action と reducer をまとめたもの
+  - もともと一つの store で管理していたものを個々の slice という単位に分けて state を管理している感じ
+    - 巨大な switch 文とかが無くなってだいぶ可読性が上がってる
 
-Builds the app for production to the `build` folder.<br />
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Slice で使うデータ型はまとめて features/types.ts に定義しておく(ts のみ）
 
-The build is minified and the filenames include the hashes.<br />
-Your app is ready to be deployed!
+```typescript
+// authSlice.ts
+export interface LOGIN_USER {
+  id: number;
+  username: string;
+}
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+export interface FILE extends Blob {
+  readonly lastModified: number;
+  readonly name: string;
+}
 
-### `yarn eject`
+// ……
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+- slice の雛形
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```typescript
+import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { RootState, AppThunk } from "../../app/store";
+import axios from "axios";
+import {
+  AUTH_STATE,
+  CRED,
+  LOGIN_USER,
+  POST_PROFILE,
+  PROFILE,
+  JWT,
+  USER,
+} from "../types";
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+const initialState: AUTH_STATE = {
+  isLoginView: true,
+  loginUser: {
+    id: 0,
+    username: "",
+  },
+  profiles: [{ id: 0, user_profile: 0, img: null }],
+};
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+export const authSlice = createSlice({
+  //slice作る
+  name: "auth",
+  initialState,
 
-## Learn More
+  reducers: {},
+});
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+export const {} = authSlice.actions;
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+//need to change
+export const selectCount = (state: RootState) => state.counter.value;
+
+export default authSlice.reducer;
+```
+
+- API を叩きに行く非同期関数例
+
+```typescript
+export const fetchAsyncLogin = createAsyncThunk(
+  // createAsyncThunkとは非同期処理の実行状況に応じたActionCreatorを生成する関数
+  // createAsyncThunkはあくまでActionCreatorを返すだけ、ActionCreatorに対応したReducerを別途実装する必要
+  // -> extra reducer内
+  "auth/login", //actionの名前　一意にする
+  async (auth: CRED) => {
+    const res = await axios.post<JWT>( //返り値はジェネリクスで型指定できる
+      `${process.env.REACT_APP_API_URL}/authen/jwt/create`,
+      auth,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    return res.data;
+  }
+);
+```
+
+- 非同期関数の後処理(extrareducer)
+
+```typescript
+extraReducers: (builder) => {
+  //非同期関数の後処理用
+  builder.addCase(
+    fetchAsyncLogin.fulfilled, //thunkからpromise型で帰ってきているので状態を見ている
+    (state, action: PayloadAction<JWT>) => {
+      //非同期関数のreturn値がpayloadに入ってる
+      localStorage.setItem("localJWT", action.payload.access); //アクセストークンをローカルストレージへ
+      action.payload.access && (window.location.href = "/tasks"); //OKならぺーじ遷移
+    }
+  );
+  //….
+};
+```
+
+- store に追記
+
+```typescript
+import authReducer from "../features/auth/authSlice";
+export const store = configureStore({
+  reducer: {,
+    auth: authReducer,
+  },
+});
+```
+
+State の情報を確認するには Chrome の Redux Devtool を使えば良い
+￼
+
+### コンポーネントを作る
+
+```typescript
+const Auth: React.FC = () => {
+  const classes = useStyles();
+  const dispatch: AppDispatch = useDispatch();
+  const isLoginView = useSelector(selectIsLoginView);
+  const [credential, setCredential] = useState({ username: "", password: "" });
+  // textfieldに入力されるたびにsetcredentialが呼び出されstateが更新される
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const name = e.target.name;
+    setCredential({ ...credential, [name]: value });
+  };
+  // selectorで呼び出しておいたログイン情報をもとに実行する関数を決定
+  const login = async () => {
+    if (isLoginView) {
+      await dispatch(fetchAsyncLogin(credential));
+    } else {
+      const result = await dispatch(fetchAsyncRegister(credential));
+      if (fetchAsyncRegister.fulfilled.match(result)) {
+        await dispatch(fetchAsyncLogin(credential));
+        await dispatch(fetchAsyncCreateProf());
+      }
+    }
+  };
+
+  return <></>;
+};
+```
