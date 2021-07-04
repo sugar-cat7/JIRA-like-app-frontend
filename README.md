@@ -133,8 +133,8 @@ export const store = configureStore({
 });
 ```
 
-State の情報を確認するには Chrome の Redux Devtool を使えば良い
-￼
+- State の情報を確認するには Chrome の Redux Devtool を使えば良い
+  ￼
 
 ### コンポーネントを作る
 
@@ -166,3 +166,11 @@ const Auth: React.FC = () => {
   return <></>;
 };
 ```
+
+### 動作確認
+
+```
+CORSの設定をAPI側でしておかないとlocalhost:3000からdjango側へアクセスできないのでエラーが出た場合はJWTのsettingを見直す(多分middlewareとかの設定忘れ)
+```
+
+chrome/検証 -> application -> localstorage から refresh token とか確認できる
